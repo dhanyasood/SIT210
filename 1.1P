@@ -4,52 +4,95 @@ int hallway = 3;
 int button = 4;
 
 // Store the time when button is pressed
-unsigned long startTime; 
+unsigned long startTime;
 
+
+// Setup the Arduino
 void setup() {
 
   pinMode(porch, OUTPUT);
   pinMode(hallway, OUTPUT);
+  pinMode(button, INPUT_PULLUP); //internal pull up resistor
 
-  pinMode(button, INPUT_PULLUP); //internal puul up resistor
+  turnLightsOff();
+}
 
-  // Lights OFF
+
+// Main program
+void loop() {
+
+  // Check if button is pressed
+  if (digitalRead(button) == LOW) {
+
+    turnLightsOn();
+
+    startTime = millis();
+
+    waitForPorchTime();
+
+    turnPorchOff();
+
+    waitForHallwayTime();
+
+    turnHallwayOff();
+
+    waitForButtonRelease();
+  }
+}
+
+
+// Turn both lights ON
+void turnLightsOn() {
+
+  digitalWrite(porch, HIGH);
+  digitalWrite(hallway, HIGH);
+}
+
+
+// Turn both lights OFF
+void turnLightsOff() {
+
   digitalWrite(porch, LOW);
   digitalWrite(hallway, LOW);
 }
 
-void loop() {
 
-  // Wait for button press
-  if (digitalRead(button) == LOW) {
+// Wait until 30 seconds have passed
+void waitForPorchTime() {
+//currenttime- start time
+  while (millis() - startTime < 30000) { //calculates time passed
+    // Wait
+  }
+}
 
-    // Turn both lights ON
-    digitalWrite(porch, HIGH);
-    digitalWrite(hallway, HIGH);
 
-    // Remember when the lights were turned ON
-    startTime = millis(); 
+// Turn porch light OFF
+void turnPorchOff() {
 
-    // Keep lights ON for the required time
+  digitalWrite(porch, LOW);
+}
 
-    // Porch light: 30 seconds
-    //calculates time passed
-    while (millis() - startTime < 30000) { //current time - start time
-      // Wait
-    }
 
-    digitalWrite(porch, LOW);
+// Wait until 60 seconds have passed
+void waitForHallwayTime() {
 
-    // Hallway stays ON for another 30 seconds
-    while (millis() - startTime < 60000) {
-      // Wait
-    }
+  while (millis() - startTime < 60000) {
+    // Wait
+  }
+}
 
-    digitalWrite(hallway, LOW);
 
-    // Wait until button is released
-    while (digitalRead(button) == LOW) {
-      // Wait
-    }
+// Turn hallway light OFF
+void turnHallwayOff() {
+
+  digitalWrite(hallway, LOW);
+}
+
+
+// Wait for the user to release the button
+void waitForButtonRelease() {
+
+  while (digitalRead(button) == LOW) {
+    // Wait
   }
 }
