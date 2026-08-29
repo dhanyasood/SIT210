@@ -1,0 +1,233 @@
+#include <WiFiNINA.h>
+#include <PubSubClient.h>
+#include <Wire.h>
+#include <BH1750.h>
+
+
+// BH1750 LIGHT SENSOR
+
+BH1750 sensor;
+
+
+
+// WIFI
+
+const char* wifi_name = "Galaxy23";
+const char* wifi_password = "****";
+
+
+// HIVEMQ CLOUD
+const char* mqtt_broker =
+  "48918457a8a34c44ad3cd01e26107036.s1.eu.hivemq.cloud"; //HIVEMQ url
+
+const int mqtt_port = 8883;
+
+const char* mqtt_username = "task3.1P"; 
+const char* mqtt_password = "12345678";
+
+
+
+// MQTT TOPIC
+
+const char* mqtt_topic = "terrarium/light"; //topic name
+
+
+
+// OBJECTS
+
+WiFiSSLClient wifiClient;
+PubSubClient mqtt(wifiClient);
+
+
+
+// LIGHT THRESHOLD
+
+const float light_limit = 130.0;
+
+// Stores current sunlight state
+bool sunlight_on = false;
+
+
+// CONNECT TO WIFI
+
+void connect_wifi() {
+
+  Serial.print("Connecting to Wi-Fi");
+
+  while (WiFi.status() != WL_CONNECTED) {
+
+    WiFi.begin(wifi_name, wifi_password);
+
+    delay(2000);
+
+    Serial.print(".");
+  }
+
+  Serial.println();
+  Serial.println("Wi-Fi connected.");
+
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+
+
+// CONNECT TO HIVEMQ
+
+void connect_mqtt() {
+
+  while (!mqtt.connected()) {
+
+    Serial.println("Connecting to HiveMQ Cloud...");
+
+    // Create a unique client ID
+    String clientID = "TerrariumLightSensor-";
+    clientID += String(random(0xffff), HEX);
+
+    if (mqtt.connect(
+          clientID.c_str(),
+          mqtt_username,
+          mqtt_password)) {
+
+      Serial.println("HiveMQ connected.");
+
+    } 
+    else {
+
+      Serial.print("MQTT connection failed. Error code: ");
+      Serial.println(mqtt.state());
+
+      delay(5000);
+    }
+  }
+}
+
+
+// SETUP
+
+void setup() {
+
+  Serial.begin(115200);
+
+  delay(2000);
+
+  Serial.println();
+  
+  Serial.println("Terrarium Light Sensor");
+
+
+
+
+  // Start I2C  Wire.begin();
+
+
+ 
+  // Start BH1750
+
+  Serial.println("Starting BH1750...");
+
+  if (sensor.begin()) {
+
+    Serial.println("BH1750 started successfully.");
+
+  } 
+  else {
+
+    Serial.println("BH1750 initialization FAILED.");
+  }
+
+
+
+  // Connect Wi-Fi
+
+  connect_wifi();
+
+
+
+  // Configure HiveMQ
+
+  mqtt.setServer(mqtt_broker, mqtt_port);
+
+
+
+  // Connect MQTT
+ 
+  connect_mqtt();
+}
+
+
+
+void loop() {
+
+  // Check Wi-Fi
+
+  if (WiFi.status() != WL_CONNECTED) {
+
+    Serial.println("Wi-Fi disconnected.");
+
+    connect_wifi();
+  }
+
+
+ 
+  // Check MQTT
+
+  if (!mqtt.connected()) {
+
+    connect_mqtt();
+  }
+
+  mqtt.loop();
+
+
+  // Read BH1750
+  float light = sensor.readLightLevel();
+
+
+  // Display light reading
+
+  Serial.print("Light: ");
+  Serial.print(light);
+  Serial.println(" lux");
+
+
+  // SUNLIGHT START
+  // If light is ABOVE 130 lux
+
+  if (light > light_limit && !sunlight_on) {
+
+    if (mqtt.publish(mqtt_topic, "SUNLIGHT_START")) {
+
+      Serial.println("SUNLIGHT_START published.");
+
+    } 
+    else {
+
+      Serial.println("Failed to publish SUNLIGHT_START.");
+    }
+
+    sunlight_on = true;
+  }
+
+
+
+  // SUNLIGHT STOP
+  // If light is 130 lux or below
+
+  else if (light <= light_limit && sunlight_on) {
+
+    if (mqtt.publish(mqtt_topic, "SUNLIGHT_STOP")) {
+
+      Serial.println("SUNLIGHT_STOP published.");
+
+    } 
+    else {
+
+      Serial.println("Failed to publish SUNLIGHT_STOP.");
+    }
+
+    sunlight_on = false;
+  }
+
+  delay(2000);
+}
