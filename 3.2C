@@ -1,0 +1,216 @@
+#include <WiFiNINA.h>
+#include <PubSubClient.h>
+
+// Wi-Fi
+char ssid[] = "Dhanya's iPhone";
+char pass[] = "havmorrr";
+
+//MQTT
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
+
+const char* broker = "broker.emqx.io";
+const int port = 1883;
+
+const char* waveTopic = "ES/Wave";
+const char* patTopic  = "ES/Pat";
+
+// Your name
+const char* studentName = "Dhanya ";
+
+// Pins
+const int redLED = 2;
+const int yellowLED = 4;
+
+const int trigPin = 7;
+const int echoPin = 8;
+
+// Prevent repeated messages too quickly
+unsigned long lastGestureTime = 0;
+const unsigned long gestureDelay = 2000;
+
+
+//callback
+void callback(char* topic, byte* payload, unsigned int length) {
+
+  Serial.println();
+  Serial.print("Topic: ");
+  Serial.println(topic);
+
+  Serial.print("Message: ");
+
+  for (unsigned int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+
+  Serial.println();
+
+  // ES/Wave -> LEDs ON
+  if (strcmp(topic, waveTopic) == 0) {
+
+    digitalWrite(redLED, HIGH);
+    digitalWrite(yellowLED, HIGH);
+
+    Serial.println("Both LEDs ON");
+  }
+
+  // ES/Pat -> LEDs OFF
+  if (strcmp(topic, patTopic) == 0) {
+
+    digitalWrite(redLED, LOW);
+    digitalWrite(yellowLED, LOW);
+
+    Serial.println("Both LEDs OFF");
+  }
+}
+
+
+//Wi-Fi connection 
+void connectWiFi() {
+
+  Serial.println("Connecting to WiFi...");
+
+  WiFi.begin(ssid, pass);
+
+  while (WiFi.status() != WL_CONNECTED) {
+
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println();
+  Serial.println("WiFi connected!");
+
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+//MQTT connection
+void connectMQTT() {
+
+  mqttClient.setServer(broker, port);
+  mqttClient.setCallback(callback);
+
+  while (!mqttClient.connected()) {
+
+    Serial.println("Connecting to MQTT...");
+
+    String clientID = "Dhanya_SIT210_" + String(random(1000, 9999));
+
+    if (mqttClient.connect(clientID.c_str())) {
+
+      Serial.println("MQTT connected!");
+
+      mqttClient.subscribe(waveTopic);
+      mqttClient.subscribe(patTopic);
+
+      Serial.println("Subscribed to ES/Wave");
+      Serial.println("Subscribed to ES/Pat");
+    }
+    else {
+
+      Serial.print("MQTT connection failed. State: ");
+      Serial.println(mqttClient.state());
+
+      delay(3000);
+    }
+  }
+}
+
+// Distance measurement 
+float getDistance() {
+
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);
+
+  if (duration == 0) {
+    return -1;
+  }
+
+  return duration * 0.0343 / 2;
+}
+
+
+
+void setup() {
+
+  Serial.begin(9600);
+
+  pinMode(redLED, OUTPUT);
+  pinMode(yellowLED, OUTPUT);
+
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  digitalWrite(redLED, LOW);
+  digitalWrite(yellowLED, LOW);
+
+  randomSeed(analogRead(A0));
+
+  connectWiFi();
+  connectMQTT();
+
+  Serial.println();
+  Serial.println("SYSTEM READY");
+}
+
+
+void loop() {
+
+  // Reconnect if MQTT disconnects
+  if (!mqttClient.connected()) {
+    connectMQTT();
+  }
+
+  mqttClient.loop();
+
+  float distance = getDistance();
+
+  if (distance > 0) {
+
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+
+    // Gesture cooldown
+    if (millis() - lastGestureTime >= gestureDelay) {
+
+      // PAT: less than 8 cm
+      if (distance < 8) {
+
+        Serial.println("PAT detected");
+
+        mqttClient.publish(patTopic, studentName);
+
+        Serial.print("Published ");
+        Serial.print(studentName);
+        Serial.println(" to ES/Pat");
+
+        lastGestureTime = millis();
+      }
+
+      // WAVE: 8 cm to 15 cm
+      else if (distance < 15) {
+
+        Serial.println("WAVE detected");
+
+        mqttClient.publish(waveTopic, studentName);
+
+        Serial.print("Published ");
+        Serial.print(studentName);
+        Serial.println(" to ES/Wave");
+
+        lastGestureTime = millis();
+      }
+    }
+  }
+
+  delay(200);
+}
