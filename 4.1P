@@ -1,0 +1,241 @@
+#include <Wire.h>        // Provides I2C communication for the BH1750
+#include <BH1750.h>      // BH1750 light sensor library
+
+
+
+
+const int LED1_PIN = 2;      // LED 1 connected to digital pin D2
+const int LED2_PIN = 4;      // LED 2 connected to digital pin D4
+
+const int BUTTON_PIN = 9;    // Push button connected to digital pin D9
+const int PIR_PIN = 10;      // PIR sensor output connected to digital pin D10
+
+
+// Light level below this value is considered dark
+const float DARK_THRESHOLD = 50.0;
+
+
+// Create a BH1750 light sensor object
+BH1750 lightMeter;
+
+
+
+// INTERRUPT FLAGS
+
+
+// These variables are changed by the interrupt service routines.
+// 'volatile' tells the Arduino that their values can change unexpectedly.
+
+volatile bool buttonEvent = false;
+volatile bool pirEvent = false;
+
+
+// Stores the current state of the LEDs
+bool lightsOn = false;
+
+
+
+// This function is automatically called when the push button
+// generates a FALLING interrupt.
+void buttonISR() {
+  buttonEvent = true;       // Set the button event flag
+}
+
+
+
+// PIR INTERRUPT SERVICE ROUTINE
+
+
+// This function is automatically called when the PIR output
+// changes from LOW to HIGH.
+void pirISR() {
+  pirEvent = true;          // Set the PIR event flag
+}
+
+
+// LED CONTROL FUNCTION
+
+
+// Turns both LEDs ON or OFF depending on the value of 'state'.
+void setLights(bool state) {
+
+  // Store the current LED state
+  lightsOn = state;
+
+  // Control LED 1
+  digitalWrite(LED1_PIN, state ? HIGH : LOW);
+
+  // Control LED 2
+  digitalWrite(LED2_PIN, state ? HIGH : LOW);
+}
+
+
+
+// SETUP
+
+
+void setup() {
+
+  // Start Serial communication at 9600 baud
+  Serial.begin(9600);
+
+
+  // Configure both LEDs as outputs
+  pinMode(LED1_PIN, OUTPUT);
+  pinMode(LED2_PIN, OUTPUT);
+
+
+  // Configure the button as an input with the internal pull-up resistor
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  // Configure the PIR sensor as a digital input
+  pinMode(PIR_PIN, INPUT);
+
+
+  // Start with both LEDs switched OFF
+  setLights(false);
+
+
+  // Start I2C communication for the BH1750
+  Wire.begin();
+
+
+  // Initialise the BH1750 sensor
+  if (lightMeter.begin()) {
+
+    // Display message if the sensor starts successfully
+    Serial.println("BH1750 READY");
+
+  } else {
+
+    // Display error message if the sensor cannot be initialised
+    Serial.println("BH1750 ERROR");
+  }
+
+
+  // Give the PIR sensor time to stabilise after power-up
+  delay(30000);
+
+
+  // Attach an interrupt to the push button.
+  // FALLING means the interrupt occurs when the signal
+  // changes from HIGH to LOW when the button is pressed.
+  attachInterrupt(
+    digitalPinToInterrupt(BUTTON_PIN),
+    buttonISR,
+    FALLING
+  );
+
+
+  // Attach an interrupt to the PIR sensor.
+  // RISING means the interrupt occurs when the PIR output
+  // changes from LOW to HIGH when motion is detected.
+  attachInterrupt(
+    digitalPinToInterrupt(PIR_PIN),
+    pirISR,
+    RISING
+  );
+
+
+
+  Serial.println("SYSTEM READY");
+  Serial.println("Button: D9");
+  Serial.println("PIR: D10");
+
+}
+
+
+// MAIN LOOP
+
+
+void loop() {
+
+
+ 
+  // BUTTON INTERRUPT HANDLING
+
+
+  // Check whether the button interrupt has occurred
+  if (buttonEvent) {
+
+    // Clear the interrupt flag
+    buttonEvent = false;
+
+
+    // Small delay used for button debounce
+    delay(50);
+
+
+    // Confirm that the button is still pressed
+    if (digitalRead(BUTTON_PIN) == LOW) {
+
+      // Toggle the current LED state
+      // ON becomes OFF and OFF becomes ON
+      setLights(!lightsOn);
+
+
+      // Display the interrupt message
+      Serial.println("BUTTON INTERRUPT DETECTED!");
+
+
+      // Display the new LED state
+      if (lightsOn) {
+
+        Serial.println("Manual control: Lights ON");
+
+      } else {
+
+        Serial.println("Manual control: Lights OFF");
+      }
+
+
+      // Wait until the button is released
+      // This prevents multiple detections while holding the button
+      while (digitalRead(BUTTON_PIN) == LOW) {
+        delay(10);
+      }
+    }
+  }
+
+
+  // PIR INTERRUPT HANDLING
+ 
+
+  // Check whether the PIR interrupt has occurred
+  if (pirEvent) {
+
+    // Clear the PIR interrupt flag
+    pirEvent = false;
+
+
+    // Display the PIR interrupt message
+    Serial.println("PIR INTERRUPT DETECTED!");
+
+
+    // Read the current light level from the BH1750
+    float lux = lightMeter.readLightLevel();
+
+
+    // Display the measured light level
+    Serial.print("Light level: ");
+    Serial.print(lux);
+    Serial.println(" lux");
+
+
+    // Check whether the environment is dark
+    if (lux < DARK_THRESHOLD) {
+
+      // Turn both LEDs ON
+      setLights(true);
+
+      Serial.println("Dark environment - Lights ON");
+
+    } else {
+
+      // Turn both LEDs OFF
+      setLights(false);
+
+      Serial.println("Bright environment - Lights OFF");
+    }
+  }
+}
