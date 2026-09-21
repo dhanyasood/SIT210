@@ -1,0 +1,106 @@
+#define BLYNK_TEMPLATE_ID "TMPL3xq6imI2s"
+#define BLYNK_TEMPLATE_NAME "Linda Home Lights"
+
+#define BLYNK_PRINT Serial
+
+#include <WiFiNINA.h>
+#include <BlynkSimpleWiFiNINA.h>
+char ssid[] = "Galaxy M32 5GE4EA";
+char pass[] = "dhanyaaa";
+
+char auth[] = "acTHCHEcIMwZQm0MiJRpT1RnV9f5jEBX";
+const int livingRoomLED = 2;
+const int bathroomLED = 4;
+const int closetLED = 5;
+void toggleLight(String room)
+{
+  if (room == "living room")
+  {
+    digitalWrite(livingRoomLED, !digitalRead(livingRoomLED));
+  }
+  else if (room == "bathroom")
+  {
+    digitalWrite(bathroomLED, !digitalRead(bathroomLED));
+  }
+  else if (room == "closet")
+  {
+    digitalWrite(closetLED, !digitalRead(closetLED));
+  }
+}
+
+
+
+BLYNK_WRITE(V0)
+{
+  int state = param.asInt();
+
+  if (state == 1)
+  {
+    digitalWrite(livingRoomLED, HIGH);
+  }
+  else
+  {
+    digitalWrite(livingRoomLED, LOW);
+  }
+}
+
+
+
+
+BLYNK_WRITE(V1)
+{
+  int state = param.asInt();
+
+  if (state == 1)
+  {
+    digitalWrite(bathroomLED, HIGH);
+  }
+  else
+  {
+    digitalWrite(bathroomLED, LOW);
+  }
+}
+
+// Closet - V2
+
+BLYNK_WRITE(V2)
+{
+  int state = param.asInt();
+
+  if (state == 1)
+  {
+    digitalWrite(closetLED, HIGH);
+  }
+  else
+  {
+    digitalWrite(closetLED, LOW);
+  }
+}
+
+
+
+void setup()
+{
+  Serial.begin(9600);
+
+  pinMode(livingRoomLED, OUTPUT);
+  pinMode(bathroomLED, OUTPUT);
+  pinMode(closetLED, OUTPUT);
+
+  // Start with all lights OFF
+  digitalWrite(livingRoomLED, LOW);
+  digitalWrite(bathroomLED, LOW);
+  digitalWrite(closetLED, LOW);
+
+  // Connect to Wi-Fi and Blynk
+  Blynk.begin(auth, ssid, pass);
+}
+
+
+
+// Main loop
+
+void loop()
+{
+  Blynk.run();
+}
